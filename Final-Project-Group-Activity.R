@@ -1,0 +1,121 @@
+library(rvest)
+library(stringr)
+library(tm)
+library(wordcloud)
+library(dplyr)
+library(ggplot2)
+library(syuzhet)
+
+extract_reviews <- function(url) {
+  page <- read_html(url)
+  
+  review_text <- page %>% html_nodes(".text_content") %>%
+    html_text()
+  
+  reviews_df <- data.frame(
+    Text_Review = review_text[1:10]   
+  )
+  
+  return(reviews_df)
+}
+
+base_url <- "https://www.airlinequality.com/airline-reviews/porter-airlines/page/"
+
+all_reviews_df <- data.frame()
+
+for (page_number in 1:37) {
+  url <- paste0(base_url, page_number, "/")
+  
+  reviews_page <- extract_reviews(url)
+  
+  all_reviews_df <- rbind(all_reviews_df, reviews_page)
+}
+
+all_reviews_df <-  all_reviews_df[1:300,]
+all_reviews_df <- data.frame(Text_Review = all_reviews_df)
+View(all_reviews_df)
+
+write.csv(all_reviews_df, file = "reviewDataset.csv", row.names = FALSE)
+
+#data cleaning
+cleaned_text <- all_reviews_df$Text_Review
+
+#clean text using gsub
+cleaned_text <- str_replace_all(cleaned_text, "✅ Trip Verified |❌ Not Verified |Not Verified |✅ Verified Review", "")
+cleaned_text <- gsub("\\|", "", cleaned_text)
+cleaned_text <- gsub("\\s+", " ", cleaned_text)
+cleaned_text <- gsub("[[:punct:]]", "", cleaned_text)
+cleaned_text <- gsub("[[:digit:]]", "", cleaned_text)
+cleaned_text <- str_replace_all(cleaned_text, "[^a-zA-Z0-9]", " ")
+
+# display the cleaned text examplee...
+head(cleaned_text)[1:5]
+
+# create a Corpus object
+wordCorpus <- Corpus(VectorSource(cleaned_text))
+
+wordCorpus <- tm_map(wordCorpus, content_transformer(tolower))
+wordCorpus <- tm_map(wordCorpus, removePunctuation)
+wordCorpus <- tm_map(wordCorpus, removeNumbers)
+wordCorpus <- tm_map(wordCorpus, removeWords, stopwords("english"))
+wordCorpus <- tm_map(wordCorpus, removeWords, stopwords("SMART"))
+wordCorpus <- tm_map(wordCorpus, stripWhitespace)
+
+#additional removal of specific words
+wordCorpus <- tm_map(wordCorpus, removeWords, c("rep", "checkin", "tarmack", "m", "ins", "s", "inpersononly", "ces", "ac", "kgs", "carryon", "pearson", "nj", "re", "expedia", "cad", "bay", "angst", "bc", "banff", "roc", "hasd", "pd", "th", "min", "iut", "ita", "conversationim", "mar", "tor", "hal", "hr", "par"))
+wordCorpus <- tm_map(wordCorpus, removeWords, c("fo", "dec", "embraer", "ee", "cckal", "c", "st", "tha", "tarmac", "brink", "nyc", "theyd", "dc", "motr", "al", "redeye", "realeasing", "montr", "windsor", "sault", "ste", "ib", "ons", "suff", "delayedcancelled", "possibleitsurely", "yow", "kg", "yts", "redeye", "realeasing", "montr", "windsor", "sault", "ste", "ib"))
+wordCorpus <- tm_map(wordCorpus, removeWords, c("ons", "suff", "delayedcancelled", "possibleitsurely", "yow", "yts", "westjet", "tvs", "prop", "stewartess", "kg", "ons", "ewr", "montr", "al", "ste", "fie", "halifaxtoronto", "dc", "wwi", "delaythough", "ski", "mt", "comp"))
+wordCorpus <- tm_map(wordCorpus, removeWords, c("q", "bombardier", "turboprops", "drinkssnacksalcohol", "ton", "bayssudburry", "offlaodingboarding", "drinkssnacks", "unitedluftthansa", "k", "pry", "gta", "york", "ytz", "fa", "dc", "centre", "aug", "rdtime"))
+wordCorpus <- tm_map(wordCorpus, removeWords, c("ste", "immigrationcustom", "hyatt", "x", "ottawatoronto", "chikingin", "kg", "yts", "yow", "yyz", "uk", "overwelming", "reps", "ytz", "andor", "torontowindsor", "yulytz", "fromto", "sudburytoronto", "myrtle", "ytzyow", "ste", "ytz", "yhz", "yow", "csrs", "yowytz", "iadytziad", "awol", "csr", "rt", "limo"))
+
+#display some cleaned content
+wordCorpus$content[1:300]
+
+#plotting using wordcloud in reviews
+# Generating a word cloud based on the words extracted from airline reviews. The term "flight" emerges prominently, being the most frequently mentioned word. The set.seed(1234) ensures reproducibility, and the wordcloud function visualizes word frequency with a minimum frequency of 1,  displaying up to 200 words in a non-random order. The rot.per parameter controls word rotation, and the color palette is set to Brewer's Set1 for enhanced visibility.
+set.seed(1234)
+wordcloud(words = wordCorpus$content, min.freq = 1,
+          max.words = 200, random.order = FALSE, rot.per = 0.50,
+          color = brewer.pal(9, "Set1"))
+
+#SENTIMENT ANALYSIS
+
+reviewP <- data.frame(text = sapply(wordCorpus$content, as.character), stringsAsFactors = FALSE)
+
+write.csv(reviewP, file = "CleanedreviewDataset.csv", row.names = FALSE)
+
+# get sentiment scores
+reviewSentiment <- get_sentiment(reviewP$text)
+
+reviews <- cbind(reviewP, reviewSentiment)
+
+encodeSentiment <- function(x) {
+  if (x <= -0.5) {
+    "1) very negative"
+  } else if (x > -0.5 & x < 0) {
+    "2) negative"
+  } else if (x > 0 & x < 0.5) {
+    "4) positive"
+  } else if (x >= 0.5) {
+    "5) very positive"
+  } else {
+    "3) neutral"
+  }
+}
+
+#sentiment scores
+reviews$reviewSentiment <- sapply(reviews$reviewSentiment, encodeSentiment)
+
+# Data visualization  
+#In the bar plot, we observe that the distribution of sentiment scores is skewed towards the extremes. The category "Very Negative" received the highest count with 132 reviews, closely followed by "Very Positive" at 123 reviews. The "Negative" sentiment category garnered 21 reviews, while "Positive" had 22 reviews, creating a near tie. Interestingly, the "Neutral" sentiment, representing the middle ground, received the lowest count with only 2 reviews.
+
+ggplot(reviews, aes(reviews$reviewSentiment, fill = reviews$reviewSentiment)) +
+  geom_bar() +
+  theme(legend.position = "none", axis.title.x = element_blank()) +
+  ylab("Number of Reviews") +
+  ggtitle("Reviews by Sentiment")
+
+count_sentiment <- reviews %>%
+  count(reviews$reviewSentiment)
+
+count_sentiment
