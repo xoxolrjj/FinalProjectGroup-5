@@ -69,7 +69,7 @@ wordCorpus <- tm_map(wordCorpus, removeWords, c("q", "bombardier", "turboprops",
 wordCorpus <- tm_map(wordCorpus, removeWords, c("ste", "immigrationcustom", "hyatt", "x", "ottawatoronto", "chikingin", "kg", "yts", "yow", "yyz", "uk", "overwelming", "reps", "ytz", "andor", "torontowindsor", "yulytz", "fromto", "sudburytoronto", "myrtle", "ytzyow", "ste", "ytz", "yhz", "yow", "csrs", "yowytz", "iadytziad", "awol", "csr", "rt", "limo"))
 
 #display some cleaned content
-wordCorpus$content[1:300]
+wordCorpus$content[1:50]
 
 #plotting using wordcloud in reviews
 # Generating a word cloud based on the words extracted from airline reviews. The term "flight" emerges prominently, being the most frequently mentioned word. The set.seed(1234) ensures reproducibility, and the wordcloud function visualizes word frequency with a minimum frequency of 1,  displaying up to 200 words in a non-random order. The rot.per parameter controls word rotation, and the color palette is set to Brewer's Set1 for enhanced visibility.
